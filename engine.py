@@ -79,13 +79,24 @@ CRISIS_ITEMS = ["q:39:53", "q:93:3-5", "q:2:186", "h:bukhari:5771"]
 
 class Engine:
     def __init__(self, data_dir=None):
-        d = data_dir or os.path.join(HERE, "data")
-        self.kb = json.load(open(os.path.join(d, "kb.json"), encoding="utf8"))
+        d = data_dir or HERE
+
+        with open(os.path.join(d, "kb.json"), encoding="utf8") as f:
+            self.kb = json.load(f)
+
         self.items = self.kb["items"]
         self.themes = self.kb["themes"]
-        self.m = Matcher(os.path.join(d, "glove50k.npz"), os.path.join(d, "glove50k_vocab.json"), self.themes)
-        self.ivec = {i: self.m.embed(it["en"][:500]) for i, it in self.items.items()}
 
+        self.m = Matcher(
+            os.path.join(d, "glove50k.npz"),
+            os.path.join(d, "glove50k_vocab.json"),
+            self.themes
+        )
+
+        self.ivec = {
+            i: self.m.embed(it["en"][:500])
+            for i, it in self.items.items()
+        }
     # ---------------------------------------------------------------- helpers
     @staticmethod
     def _any(patterns, text):
