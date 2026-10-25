@@ -99,6 +99,16 @@ class Engine:
         self.m = Matcher(os.path.join(d, "glove50k.npz"), os.path.join(d, "glove50k_vocab.json"), self.themes, **MATCHER_KW)
         self.ivec = {i: self.m.embed(it["en"][:500]) for i, it in self.items.items()}
 
+        self.m = Matcher(
+            os.path.join(d, "glove50k.npz"),
+            os.path.join(d, "glove50k_vocab.json"),
+            self.themes
+        )
+
+        self.ivec = {
+            i: self.m.embed(it["en"][:500])
+            for i, it in self.items.items()
+        }
     # ---------------------------------------------------------------- helpers
     @staticmethod
     def _any(patterns, text):
