@@ -163,3 +163,53 @@ TEST = [
  ("what time does the bank open", ["none"]),
  ("explain how photosynthesis works", ["none"]),
 ]
+
+
+# TEST2: 36 sentences held out from the project owner's 12 feeling categories (3 per category).
+# They were NOT used as example phrases. Labels were written before any matching was run.
+TEST2 = [
+    ("I'm overthinking every little thing I said.", ['overthinking', 'anxiety']),
+    ("I'm afraid of losing someone I love.", ['fear_trust', 'anxiety', 'overthinking']),
+    ('I keep questioning my own decisions.', ['overthinking', 'decisions', 'anxiety']),
+    ("I can't forgive myself for my mistakes.", ['self_forgiveness', 'guilt']),
+    ("I did something wrong, and it's haunting me.", ['self_forgiveness', 'guilt']),
+    ("I'm struggling to forgive myself.", ['self_forgiveness', 'guilt']),
+    ('The person I love hurt me deeply.', ['betrayal']),
+    ('I gave someone my everything, but they left.', ['betrayal', 'sadness', 'loneliness']),
+    ('I feel replaceable.', ['betrayal', 'self_worth']),
+    ("I'm tired of pretending to be happy.", ['sadness', 'loneliness']),
+    ("I'm missing someone I can't get back.", ['sadness', 'bereavement', 'love_relationship']),
+    ("I don't feel like myself anymore.", ['sadness', 'self_worth', 'guidance']),
+    ("I'm afraid of failing.", ['anxiety', 'fear_trust', 'failure']),
+    ("I'm scared that I'll never be successful.", ['anxiety', 'fear_trust', 'failure', 'motivation']),
+    ('I feel nervous about making the wrong decision.', ['decisions', 'anxiety', 'overthinking']),
+    ("I'm afraid Allah won't forgive me.", ['guilt', 'self_forgiveness']),
+    ('I feel ashamed of my sins.', ['guilt', 'self_forgiveness']),
+    ('I keep falling back into my old habits.', ['guilt', 'weak_faith']),
+    ('I want revenge on the person who betrayed me.', ['anger', 'betrayal', 'injustice']),
+    ('I get angry over the smallest things.', ['anger']),
+    ("I want to forgive, but I'm still hurting.", ['anger', 'betrayal', 'family']),
+    ("I'm tired of trying so hard.", ['motivation', 'overwhelmed', 'hopeless', 'hardship']),
+    ("I don't know what I'm doing with my life.", ['guidance', 'motivation']),
+    ('I feel like my efforts are going to waste.', ['motivation', 'failure', 'hopeless']),
+    ("I'm finally finding peace in my life.", ['gratitude']),
+    ("I'm feeling hopeful about my future.", ['gratitude']),
+    ('I want to become more grateful every day.', ['gratitude']),
+    ("I feel like I'm the only one trying.", ['love_relationship', 'family']),
+    ("I love someone who doesn't love me back.", ['love_relationship', 'betrayal']),
+    ('I keep making dua for someone I love.', ['love_relationship', 'dua']),
+    ("I'm hurt by the way my family treats me.", ['family', 'injustice']),
+    ("I feel responsible for everyone's happiness.", ['family', 'overwhelmed']),
+    ("I'm feeling neglected by the people closest to me.", ['family', 'loneliness', 'injustice']),
+    ('My iman feels weak lately.', ['weak_faith']),
+    ('I feel spiritually lost.', ['weak_faith', 'guidance']),
+    ("I'm finding it difficult to trust Allah's plan.", ['fear_trust', 'weak_faith', 'why_trials']),
+]
+
+# Themes that were SPLIT when the owner's categories were added. A prediction in a new 'child' theme counts as
+# correct for an older label when it is the parent. Declared before re-running the older test sets.
+EQUIV = {
+    'guilt': {'self_forgiveness'}, 'anxiety': {'overthinking'}, 'fear_trust': {'overthinking'},
+    'hopeless': {'motivation'}, 'hardship': {'why_trials', 'motivation'}, 'failure': {'motivation'},
+    'injustice': {'betrayal'}, 'family': {'love_relationship', 'betrayal'}, 'weak_faith': {'why_trials'},
+}

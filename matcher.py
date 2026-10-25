@@ -23,17 +23,26 @@ def norm_text(s):
     return re.sub(r"[^a-z0-9]+", " ", s).strip()
 
 
-class Matcher:
-    def __init__(self, vec_npz, vocab_json, themes, emb_w=1.0, kw_w=0.25, kw_cap=2.0, top_pair=2,
-                 remove_pc=1, sif_a=1e-3):
-        z = np.load(vec_npz)
-        self.V = z["vecs"].astype(np.float32)
+_CACHE = {}
+
+
+def _load_vectors(vec_npz, vocab_json, sif_a):
+    key = (vec_npz, vocab_json, sif_a)
+    if key not in _CACHE:
+        V = np.load(vec_npz)["vecs"].astype(np.float32)
         words = json.load(open(vocab_json))
-        self.w2i = {w: i for i, w in enumerate(words)}
         n = len(words)
         H = math.log(n) + 0.5772
         p = 1.0 / ((np.arange(n) + 1) * H)               # Zipf estimate of unigram probability from frequency rank
-        self.sif = (sif_a / (sif_a + p)).astype(np.float32)
+        _CACHE[key] = (V, {w: i for i, w in enumerate(words)}, (sif_a / (sif_a + p)).astype(np.float32))
+    return _CACHE[key]
+
+
+class Matcher:
+    def __init__(self, vec_npz, vocab_json, themes, emb_w=1.0, kw_w=0.25, kw_cap=2.0, top_pair=2,
+                 remove_pc=1, sif_a=1e-3, extra_stop=()):
+        self.V, self.w2i, self.sif = _load_vectors(vec_npz, vocab_json, sif_a)
+        self.stop = STOP | set(extra_stop)
         self.themes = themes
         self.emb_w, self.kw_w, self.kw_cap, self.top_pair, self.remove_pc = emb_w, kw_w, kw_cap, top_pair, remove_pc
 
@@ -66,7 +75,7 @@ class Matcher:
         for pat, rep in ((r"can't", "cannot"), (r"won't", "will not"), (r"n't", " not"), (r"'m", " am"), (r"'re", " are"),
                          (r"'ve", " have"), (r"'ll", " will"), (r"'d", " would"), (r"'s", "")):
             s = re.sub(pat, rep, s)
-        return [t for t in re.findall(r"[a-z]+", s) if t not in STOP]
+        return [t for t in re.findall(r"[a-z]+", s) if t not in self.stop]
 
     def _lookup(self, t):
         if t in self.w2i:

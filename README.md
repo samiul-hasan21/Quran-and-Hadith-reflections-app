@@ -7,39 +7,58 @@ Describe how you feel or what you are going through, and the app returns **verif
 > so nothing can be invented or misquoted. Each result links to its source so it can be checked in full context.
 
 ## What it does
-- Understands 22 common feelings and life situations: anxiety, sadness, grief, hardship, hopelessness, guilt, loneliness, anger,
-  gratitude, study and work, failure, provision, illness, fear and trust, weak faith, family, being wronged, dua, burnout,
-  self-worth, decisions, guidance.
-- Shows up to 3 verses + 2 hadith for the best-matching feeling, and a short second section if another feeling also fits.
-- Lets you **choose a feeling directly** if the match is not right.
-- Declines honestly when nothing matches, instead of guessing.
+- Understands **28 feelings and life situations**, including the 12 categories the project owner supplied: overthinking, feeling
+  guilty, betrayal and heartbreak, sadness and loneliness, anxiety and fear, regret and repentance, anger and resentment,
+  hopelessness and loss of motivation, gratitude and happiness, relationship struggles, family problems, faith and spiritual struggles.
+  Others: grief, hardship, illness, money and provision, study and work, failure, decisions, guidance, burnout, self-worth.
+- Shows up to 3 verses + 2 hadith for the best-matching feeling, plus a shorter second section if another feeling also fits.
+- A **picker** lists the 12 categories first, so a person can choose directly instead of typing.
+- If it is not sure, it **says so and offers the three closest feelings as a tentative guess**. It never forces an answer.
+- 144 curated passages (106 Quran passages and 38 hadith), each tagged to the feelings it speaks to.
 
 ## How the matching works
 ```
-your text -> tokens -> SIF-weighted average of GloVe word vectors -> cosine similarity to example phrases per feeling
-                    +  weighted keyword / phrase cues
-                    -> hybrid score -> best feeling (or "no match" below a threshold)
+your text -> tokens (filler words dropped) -> SIF-weighted average of GloVe word vectors -> cosine similarity to example phrases
+          +  weighted keyword / phrase cues  ->  hybrid score  ->  best feeling, or "not sure" below a threshold
 ```
-It is plain NumPy with about 10 MB of data: no deep-learning framework, ~140 MB RAM, starts in a few seconds, and fits free hosting.
-(An earlier TensorFlow-based project of mine needed 620 MB just to import and crashed on a 512 MB host, so this was a design constraint.)
+Plain NumPy and ~10 MB of data: no deep-learning framework, ~136 MB RAM, starts in a few seconds, fits free hosting.
+(An earlier TensorFlow-based project of mine needed 620 MB just to import and crashed on a 512 MB host, so this was a constraint.)
 
 ### Measured accuracy (reproduce with `python tests/evaluate.py`)
-The TEST set (66 on-topic and 8 off-topic messages) was written *before* the matcher existed, in a different style from the
-example phrases, and was evaluated once after tuning on a separate DEV set.
+**Headline: 36 sentences from the owner's 12 categories that were kept out of the example phrases.** (3 per category; the other
+7 per category, 84 in total, teach the matcher.) Labels were written before any matching was run.
 
-| Setup | DEV top-1 | TEST top-1 | TEST right feeling in top 3 | Off-topic declined |
+What the person actually sees on those 36 sentences:
+
+| Outcome | Count |
+|---|---|
+| Right feeling shown in the answer | **26 / 36 (72%)** |
+| Declined, but the right feeling was one of the 3 offered suggestions | 3 / 36 |
+| Declined, right feeling not offered | 2 / 36 |
+| Answered with a different feeling | 5 / 36 |
+
+So **29 of 36 (81%) reach the right feeling in at most one tap.** Matcher-level numbers:
+
+| Setup | Held-out top-1 | Held-out right feeling in top 3 | Earlier test set top-1 (strict / adjusted) | Off-topic declined |
 |---|---|---|---|---|
-| **Hybrid (meaning + keywords)** | 0.95 | **0.92** | **0.97** | 8 / 8 |
-| Keywords only | 0.88 | 0.85 | 0.94 | 8 / 8 |
-| Word-vector meaning only | 0.65 | 0.47 | 0.86 | 8 / 8 |
+| **Hybrid (meaning + keywords)** | 0.69 | **0.86** | 0.89 / 0.91 | 16 / 16 |
+| Keywords only | 0.67 | 0.78 | 0.83 / 0.83 | 16 / 16 |
+| Word-vector meaning only | 0.33 | 0.72 | 0.42 / 0.44 | 16 / 16 |
 
-"Top-1" counts a declined on-topic message as a miss. On TEST there were 5 misses: 2 declined (oblique wording) and 3 matched to a
-neighbouring feeling. I did not tune on them. Both sets were written by one person, so real-world accuracy will be lower.
+"Top-1" counts a declined sentence as a miss. The earlier test set (66 on-topic + 8 off-topic messages, written before the first
+matcher existed) is a regression check; "adjusted" also accepts a theme that was later split off from the labelled one (declared in advance).
+
+Honest notes
+- Short, abstract sentences ("I feel replaceable.") are the hardest: they contain few distinctive words.
+- Settings were chosen by leave-one-out on the training sentences plus an older dev set, **not** on the held-out ones. On the held-out set
+  the first-choice score moved from 75% to 69% (two sentences) while the top-3 rose from 83% to 86%. That is noise, not an improvement,
+  and I did not keep tuning against it.
+- One person wrote both the training and test sentences, and the labels are my judgement, so real-world accuracy will be lower.
 
 ## Safety design
-Handled **before** any matching, and covered by tests (`python tests/test_engine.py`):
+Handled **before** any matching, and covered by tests (`python tests/test_engine.py`, 21 tests):
 - **Crisis language** (self-harm, suicide): a caring message, emergency-number and helpline guidance, then gentle reminders of mercy.
-  Detection errs toward caution, so some harmless phrases may trigger it.
+  Detection errs toward caution, so some harmless phrases may trigger it. A test confirms none of the owner's 120 sentences does.
 - **Abuse or violence**: a safety message and **no verses about patience**, so nothing can be read as advice to endure harm.
 - **Rulings (halal/haram, fatwa)**: redirected to qualified scholars. The app is for reflection, not for issuing rulings.
 - **Softer distress** ("I can't go on"): a gentle check-in is added, and reflections are still shown.
@@ -55,12 +74,13 @@ Handled **before** any matching, and covered by tests (`python tests/test_engine
 
 Integrity rules (enforced at build time, see `tools/README.md`):
 - Curated lists hold **references only**; every hadith pick has an assertion phrase and the build fails if it is not in the text.
-- Where only part of a verse fits the feeling (for example 2:216 begins with a ruling about fighting), the passage is shown as an
-  **excerpt** with a visible "…" and an "excerpt" label. Verses that were poor fits were replaced rather than trimmed.
+- Where only part of a verse fits the feeling (for example 2:216 begins with a ruling about fighting, and 2:222 is mainly about
+  menstruation but contains a well-known line on repentance), the passage is shown as an **excerpt** with a visible "…" and an
+  "excerpt" label. Verses that were poor fits were replaced rather than trimmed.
 - Hadith numbers are printed for Bukhari only, verified by matching text against a second dataset. Muslim hadith are cited by book
   because the two datasets use different Muslim numbering and I would not print a number I could not verify.
 - Mechanical cleaning only: footnote markers, transliteration marks (ā to a), end-of-verse punctuation and balanced quotation marks
-  for standalone display.
+  for standalone display. Hadith with nested quotation marks are left exactly as sourced.
 
 This project is for education. The translations and hadith texts have their own terms of use; keep the attributions and check them
 before any commercial use.
@@ -75,11 +95,12 @@ python tests/evaluate.py
 
 ## Deploy on Render (free)
 Push this folder to GitHub, then in Render choose **New + -> Blueprint** and select the repo. `render.yaml` does the rest.
-The free plan sleeps after 15 minutes idle; wake-up takes a few seconds because the app is lightweight.
+Pushing a new commit redeploys automatically. The free plan sleeps after 15 minutes idle; wake-up is quick because the app is lightweight.
+On a phone, open the Render link and use "Add to Home Screen" (the app ships an install manifest and icon).
 
 ## Limitations
 - English only. Not a substitute for a scholar, a doctor, or a mental-health professional.
-- The curated verses are my selection for each feeling. Scholars may choose differently, and a verse can carry meanings beyond
-  its use here, so the link to the full context is always provided.
+- The selection of verses and hadith for each feeling is the project author's judgement, **not a scholar's**. A knowledgeable reviewer
+  should check it before wide release. A verse can carry meanings beyond its use here, so the full-context link is always shown.
 - Quranic annotation marks need a Quran-capable font; the page requests Amiri from Google Fonts, and most phones render them natively.
 - Muslim hadith carry no printed number (see above).

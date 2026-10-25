@@ -11,7 +11,13 @@ import numpy as np
 from matcher import Matcher
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-THRESHOLD = 0.47        # minimum hybrid score to answer (chosen on DEV; see tests/evaluate.py)
+# Matcher settings, chosen by leave-one-out cross-validation on the training sentences plus the older dev set
+# (never on the held-out test sentences). Filler words carry no feeling, and short sentences otherwise drift
+# toward whichever theme has the most "I feel ..." example phrases.
+EXTRA_STOP = ("feel", "feeling", "feels", "felt", "lately", "still", "anymore", "really", "like", "right", "now",
+              "everything", "something", "someone")
+MATCHER_KW = dict(emb_w=1.0, kw_w=0.6, remove_pc=1, top_pair=2, extra_stop=EXTRA_STOP)
+THRESHOLD = 0.51        # minimum hybrid score to answer: highest off-topic DEV score + 0.02
 SECOND_RATIO = 0.85     # a second theme is shown if its score >= 85% of the best one
 MAX_CHARS = 1000
 
@@ -69,21 +75,28 @@ MSG_RULING = (
     "confusion), describe that feeling and I will share reflections for it."
 )
 MSG_NOMATCH = (
-    "I couldn't match that to a feeling I understand well. Try describing what you are going through in a sentence or two "
-    "(for example: *I'm anxious about my exams*, *I lost my father*, *I feel far from Allah*), or choose a feeling below."
+    "I'm not sure I understood that. If you are describing a feeling, pick the closest one below, or try again with a sentence "
+    "or two (for example: *I'm anxious about my exams*, *I lost my father*, *I feel far from Allah*)."
 )
 MSG_EMPTY = "Write a sentence about how you are feeling or what you are going through, or choose a feeling below."
 
 CRISIS_ITEMS = ["q:39:53", "q:93:3-5", "q:2:186", "h:bukhari:5771"]
 
 
+def _default_data_dir():
+    """Data files live in ./data normally, but a flat layout (files next to engine.py) works too."""
+    nested = os.path.join(HERE, "data")
+    return nested if os.path.isdir(nested) else HERE
+
+
 class Engine:
     def __init__(self, data_dir=None):
-        d = data_dir or os.path.join(HERE, "data")
-        self.kb = json.load(open(os.path.join(d, "kb.json"), encoding="utf8"))
+        d = data_dir or _default_data_dir()
+        with open(os.path.join(d, "kb.json"), encoding="utf8") as f:
+            self.kb = json.load(f)
         self.items = self.kb["items"]
         self.themes = self.kb["themes"]
-        self.m = Matcher(os.path.join(d, "glove50k.npz"), os.path.join(d, "glove50k_vocab.json"), self.themes)
+        self.m = Matcher(os.path.join(d, "glove50k.npz"), os.path.join(d, "glove50k_vocab.json"), self.themes, **MATCHER_KW)
         self.ivec = {i: self.m.embed(it["en"][:500]) for i, it in self.items.items()}
 
     # ---------------------------------------------------------------- helpers
@@ -134,7 +147,9 @@ class Engine:
             if soft:
                 return {"status": "soft", "message": MSG_SOFT, "sections": [
                     self._section("hopeless", self._pick("hopeless", None))]}
-            return {"status": "nomatch", "message": MSG_NOMATCH, "sections": []}
+            # Not confident: say so, but offer the three closest feelings as a tentative one-tap guess.
+            sugg = [{"id": t, "title": self.themes[t]["title"]} for t, _ in ranked[:3]]
+            return {"status": "nomatch", "message": MSG_NOMATCH, "sections": [], "suggestions": sugg}
 
         qv = self.m.embed(text)
         sections = [self._section(t1, self._pick(t1, qv))]
@@ -145,6 +160,30 @@ class Engine:
                 sections.append(self._section(t2, ids))
         return {"status": "soft" if soft else "ok", "message": MSG_SOFT if soft else "", "sections": sections,
                 "matched": [t1] + ([t2] if len(sections) > 1 else [])}
+
+    def picker_choices(self):
+        """Dropdown entries: the 12 categories first, then the remaining situations."""
+        cats = [(c["title"], f"cat:{c['id']}") for c in self.kb["categories"]]
+        others = [(self.themes[t]["title"], f"theme:{t}") for t in self.kb["other_themes"]]
+        return cats + others
+
+    def respond_pick(self, value):
+        kind, _, key = (value or "").partition(":")
+        if kind == "cat":
+            return self.respond_category(key)
+        if kind == "theme":
+            return self.respond_theme(key)
+        return {"status": "empty", "message": MSG_EMPTY, "sections": []}
+
+    def respond_category(self, cid):
+        cat = next((c for c in self.kb["categories"] if c["id"] == cid), None)
+        if cat is None:
+            return {"status": "empty", "message": MSG_EMPTY, "sections": []}
+        sections = []
+        for n, tid in enumerate(cat["themes"]):                       # first theme in full, the rest shorter
+            kw = {} if n == 0 else dict(n_quran=2, n_hadith=1)
+            sections.append(self._section(tid, self._pick(tid, None, **kw)))
+        return {"status": "ok", "message": "", "sections": sections, "matched": list(cat["themes"])}
 
     def respond_theme(self, tid):
         if tid not in self.themes:

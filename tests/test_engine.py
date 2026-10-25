@@ -76,11 +76,11 @@ def test_empty_and_offtopic():
         assert E.respond(q)["status"] == "nomatch", q
 
 def test_known_queries_land_on_the_right_theme():
-    cases = {"I am so anxious about my exam results": {"anxiety", "study_work"},
+    cases = {"I am so anxious about my exam results": {"anxiety", "study_work", "overthinking"},
              "my mother passed away and I miss her": {"bereavement"},
              "I feel so lonely and have nobody": {"loneliness"},
              "I have too much debt and cannot pay rent": {"provision"},
-             "I committed a sin and want to repent": {"guilt"}}
+             "I committed a sin and want to repent": {"guilt", "self_forgiveness"}}
     for q, ok in cases.items():
         r = E.respond(q); assert r["status"] in ("ok", "soft") and r["matched"][0] in ok, (q, r.get("matched"))
 
@@ -102,6 +102,47 @@ def test_deterministic():
 
 def test_long_input_is_truncated_not_crashing():
     assert E.respond("I am worried " * 500)["status"] in ("ok", "soft", "nomatch")
+
+# ------------------------------------------------------------------ owner's 12 categories (v2)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+from userfeelings import CATEGORIES, HELD_OUT, held_out_set
+
+def test_owner_sentences_never_trip_the_safety_layers():
+    for cat, sents in CATEGORIES.items():
+        for s in sents:
+            st = E.respond(s)["status"]
+            assert st not in ("crisis", "abuse", "ruling"), (cat, s, st)
+
+def test_owner_sentences_are_mostly_answered():
+    train = [s for cat, sents in CATEGORIES.items() for i, s in enumerate(sents) if i not in HELD_OUT]
+    answered = sum(E.respond(s)["status"] in ("ok", "soft") for s in train)
+    assert answered / len(train) >= 0.9, answered / len(train)
+
+def test_no_dead_ends_on_held_out_sentences():
+    for q, _ in held_out_set():
+        r = E.respond(q)
+        assert r["sections"] or r.get("suggestions") or r["message"], q
+
+def test_picker_covers_the_12_categories_and_everything_works():
+    choices = E.picker_choices()
+    titles = [t for t, _ in choices]
+    assert titles[:12] == list(CATEGORIES.keys()) or set(CATEGORIES) <= set(titles)
+    assert len(E.themes) >= 28
+    for title, value in choices:
+        r = E.respond_pick(value)
+        assert r["sections"] and all(s["items"] for s in r["sections"]), title
+
+def test_decline_offers_three_valid_suggestions():
+    r = E.respond("how do I bake bread")
+    assert r["status"] == "nomatch" and len(r["suggestions"]) == 3
+    assert all(s["id"] in E.themes for s in r["suggestions"])
+
+def test_new_practical_hadith_are_attached_to_the_right_feelings():
+    ids = lambda tid: set(E.themes[tid]["items"])
+    assert "h:bukhari:3147" in ids("anger")            # the Prophet's remedy for anger
+    assert "h:bukhari:5060:x" in ids("overthinking")   # passing thoughts are forgiven
+    assert "h:bukhari:5901" in ids("betrayal")         # a believer is not stung twice from the same hole
+    assert "h:bukhari:6069" in ids("guilt")            # the master of seeking forgiveness
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
