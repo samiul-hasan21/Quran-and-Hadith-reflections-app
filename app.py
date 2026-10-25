@@ -195,7 +195,7 @@ with gr.Blocks(title="Reflections from the Quran & Sunnah", css=CSS,
             with gr.Row():
                 go = gr.Button("Find reflections", variant="primary")
                 clear = gr.Button("Clear")
-            gr.Examples(EXAMPLES, inputs=box, label="Try one of these", examples_per_page=len(EXAMPLES))
+            gr.Examples(EXAMPLES, inputs=box, label="You can Try one of these", examples_per_page=len(EXAMPLES))
             pick = gr.Dropdown(choices=E.picker_choices(), value=None, label="Or choose a feeling", interactive=True)
             suggest = gr.Radio(choices=[], value=None, visible=False, interactive=True,
                                label="Not sure I understood. Is it one of these?")
