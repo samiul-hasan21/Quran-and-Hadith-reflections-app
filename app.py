@@ -178,7 +178,7 @@ with gr.Blocks(title="Reflections from the Quran & Sunnah", css=CSS,
             with gr.Row():
                 go = gr.Button("Find reflections", variant="primary")
                 clear = gr.Button("Clear")
-            gr.Examples(EXAMPLES, inputs=box, label="Try one of these")
+            gr.Examples(EXAMPLES, inputs=box, label="Example feelings")
             pick = gr.Dropdown(choices=E.theme_choices(), value=None, label="Or choose a feeling", interactive=True)
         with gr.Column(scale=7):
             out = gr.HTML(WELCOME)
